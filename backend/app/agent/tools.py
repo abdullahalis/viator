@@ -26,7 +26,7 @@ class FlightSearchParams(BaseModel):
     arrival_id: str = Field(..., description="REQUIRED: The 3 letter ID of the arrival airport. For example, 'JFK' for John F. Kennedy International Airport. You can specify multiple arrvial airports by separating them with a comma. For example, CDG,ORY for both Charles de Gaulle and Orly airports in Paris.")
     outbound_date: str = Field(..., description="REQUIRED: The date of the outbound flight in YYYY-MM-DD format.")
     return_date: str = Field(..., description="REQUIRED if flight is round trip, otherwise OPTIONAL: The date of the return flight in YYYY-MM-DD format.")
-    type: int = Field(1, description="OPTIONAL Parameter defines the type of flight. Available options: 1 - One-way (default), 2 - Round-trip")
+    type: int = Field(1, description="OPTIONAL Parameter defines the type of flight. Available options: 1 - Round-trip (default), 2 - One-way")
     travel_class: int = Field(1, description="OPTIONAL Parameter defines the travel class. Available options: 1 - Economy (default), 2 - Premium economy, 3 - Business, 4 - First")
     adults: int = Field(1, description="OPTIONAL Number of adults traveling. Default is 1.")
     children: int = Field(0, description="OPTIONAL Number of children traveling. Default is 1.")
