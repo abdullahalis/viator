@@ -1,122 +1,197 @@
 from dotenv import load_dotenv
-from typing import Annotated, Literal
-from langgraph.graph import StateGraph, START, END
+from typing import Literal, Optional
+from langgraph.graph import StateGraph, END, START
 from langgraph.graph.message import add_messages
 from langchain.chat_models import init_chat_model
-from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
-from tools import get_tools
+from langchain_core.messages import ToolMessage, HumanMessage, AIMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
-from langgraph.types import Command, interrupt
-from langgraph.graph import MessagesState, START
+from langgraph.graph import MessagesState
+import json
+from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
+
+from agent.tools import get_tools  # Your custom tool loader
 
 load_dotenv()
 
-llm = init_chat_model("gpt-4o-mini",model_provider="openai")
-class AskHuman(BaseModel):
-    """Ask the human a question"""
-
-    question: str
-
+# 1. Load model and tools
+llm = init_chat_model("gpt-4o-mini", model_provider="openai")
+structured_llm = ChatOpenAI(model="gpt-4o").with_structured_output(method="json_mode")
 tools = get_tools()
-tool_node = ToolNode(tools)
-# tools.append(AskHuman)
-print(tools)
+llm_with_tools = llm.bind_tools(tools)
 
-llm_with_tools = llm.bind(tools)
+# 2. Track last tool in state
+class CustomState(MessagesState):
+    last_tool_used: Optional[str] = None
 
-# Define the function that determines whether to continue or not
-def should_continue(state):
-    messages = state["messages"]
-    last_message = messages[-1]
-    # If there is no function call, then we finish
-    if not last_message.tool_calls:
-        return END
-    # If tool call is asking Human, we return that node
-    # You could also add logic here to let some system know that there's something that requires Human input
-    # For example, send a slack message, etc
-    elif last_message.tool_calls[0]["name"] == "AskHuman":
-        return "ask_human"
-    # Otherwise if there is, we continue
-    else:
-        return "action"
+# 3. Define tool node wrapper to also save last_tool_used
+def tool_node_with_tracking(state: CustomState) -> dict:
+    tool_node = ToolNode(tools)
+    new_state = tool_node.invoke(state)
 
+    messages = new_state["messages"]
+    last_tool_call = next(
+        (m for m in messages[::-1] if isinstance(m, ToolMessage)), None
+    )
+    print("last call", last_tool_call)
+    if last_tool_call:
+        new_state["last_tool_used"] = last_tool_call.name
 
-# Define the function that calls the model
-def call_model(state):
+    return new_state
+
+# 4. Define LLM call
+def call_model(state: CustomState):
     messages = state["messages"]
     response = llm_with_tools.invoke(messages)
-    # We return a list, because this will get added to the existing list
     return {"messages": [response]}
 
+# 5. Determine where to go after LLM
+def route_after_llm(state: CustomState) -> Literal["tools", END]:
+    print(state)
+    if state["messages"][-1].tool_calls:
+        return "tools"
+    return END
 
-# We define a fake node to ask the human
-def ask_human(state):
-    tool_call_id = state["messages"][-1].tool_calls[0]["id"]
-    ask = AskHuman.model_validate(state["messages"][-1].tool_calls[0]["args"])
-    location = interrupt(ask.question)
-    tool_message = [{"tool_call_id": tool_call_id, "type": "tool", "content": location}]
-    return {"messages": tool_message}
+# 6. Route after tools based on last_tool_used
+def route_after_tools(state: CustomState) -> Literal["summarize", "LLM"]:
+    print("staet tool used", state.get("last_tool_used"))
+    if state.get("last_tool_used") == "search_flights":
+        return "summarize"
+    return "LLM"
 
-# Build the graph
+# 7. Summarization logic
+def summarize_flights(state: CustomState):
+    print("summarizing...")
+    # Get tool output
+    message = state["messages"][-1]
+    if not isinstance(message, ToolMessage) and message.name == "search_flights":
+        raise ValueError("No search_flights result found")
+    
+    flight_list = json.loads(message.content)
+    prompt = f"""
+        You are an expert travel agent. The user just searched for flights and got the following options:
 
-from langgraph.graph import END, StateGraph
+        {message.content}
 
-# Define a new graph
-workflow = StateGraph(MessagesState)
+        Pick the top 3 flights that balance good price, reasonable departure/arrival times, and total travel time. 
 
-# Define the three nodes we will cycle between
-workflow.add_node("agent", call_model)
-workflow.add_node("action", tool_node)
-workflow.add_node("ask_human", ask_human)
+        Return a JSON object with:
+        - "flights": an array of the indexes of the top 3 flights,
+        - "message": a short paragraph summarizing your picks to the user in a friendly tone.
+        """
 
-# Set the entrypoint as `agent`
-# This means that this node is the first one called
-workflow.add_edge(START, "agent")
+    response = structured_llm.invoke(prompt)
+    flights_data = []
+    for index in response['flights']:
+        flights_data.append(flight_list[index])
 
-# We now add a conditional edge
-workflow.add_conditional_edges(
-    # First, we define the start node. We use `agent`.
-    # This means these are the edges taken after the `agent` node is called.
-    "agent",
-    # Next, we pass in the function that will determine which node is called next.
-    should_continue,
-    path_map=["ask_human", "action", END],
-)
+    response['flights'] = flights_data
 
-# We now add a normal edge from `tools` to `agent`.
-# This means that after `tools` is called, `agent` node is called next.
-workflow.add_edge("action", "agent")
+    # Convert to message
+    return {"messages": state["messages"] + [AIMessage(
+                content=json.dumps({
+            "message": response["message"],
+            "flights": response["flights"]
+        })
+    )]}
 
-# After we get back the human response, we go back to the agent
-workflow.add_edge("ask_human", "agent")
+# 8. Build the graph
+workflow = StateGraph(CustomState)
 
-# Set up memory
-from langgraph.checkpoint.memory import MemorySaver
+workflow.add_node("LLM", call_model)
+workflow.add_node("tools", tool_node_with_tracking)
+workflow.add_node("summarize", summarize_flights)
+workflow.set_entry_point("LLM")
 
-memory = MemorySaver()
+workflow.add_conditional_edges("LLM", route_after_llm, {
+    "tools": "tools",
+    END: END,
+})
 
-# Finally, we compile it!
-# This compiles it into a LangChain Runnable,
-# meaning you can use it as you would any other runnable
-app = workflow.compile(checkpointer=memory)
+workflow.add_conditional_edges("tools", route_after_tools, {
+    "summarize": "summarize",
+    "LLM": "LLM",
+})
 
-config = {"configurable": {"thread_id": "2"}}
-for event in app.stream(
-    {
-        "messages": [
-            (
-                "user",
-                "Ask the user what their destination is then help them book a flight",
-            )
-        ]
-    },
-    config,
-    stream_mode="values",
-):
-    if "messages" in event:
-        event["messages"][-1].pretty_print()
+workflow.add_edge("summarize", END)
+agent = workflow.compile(checkpointer=MemorySaver())
+config = {"configurable": {"thread_id": "1"}}
+
+def get_agent():
+    return (agent, config)
+# # Example run
+# for chunk in agent.stream(
+#     {"messages": [("user", "Show me flights from ORD to MIA round trip on August 7, 2025 for one week")]},
+#     stream_mode="values",
+# ):
+#     if "messages" in chunk:
+#         chunk["messages"][-1].pretty_print()
+
+# from dotenv import load_dotenv
+# from typing import Annotated, Literal
+# from langgraph.graph import StateGraph, START, END
+# from langgraph.graph.message import add_messages
+# from langchain.chat_models import init_chat_model
+# from pydantic import BaseModel, Field
+# from typing_extensions import TypedDict
+# from tools import get_tools
+# from langchain_core.tools import tool
+# from langgraph.prebuilt import ToolNode
+# from langgraph.types import Command, interrupt
+# from langgraph.graph import MessagesState, START
+
+# load_dotenv()
+
+# llm = init_chat_model("gpt-4o-mini",model_provider="openai")
+
+# tools = get_tools()  # Returns list of Tool instances
+# llm_with_tools = llm.bind_tools(tools)
+# # Map tool names to individual nodes
+# tool_node = ToolNode(tools)
+
+# def call_model(state: MessagesState):
+#     messages = state["messages"]
+#     response = llm_with_tools.invoke(messages)
+#     return {"messages": [response]}
+
+# def call_tools(state: MessagesState) -> Literal["tools", END]:
+#     messages = state["messages"]
+#     last_message = messages[-1]
+#     print("last message", last_message)
+#     if last_message.tool_calls:
+#         return "tools"
+#     return END
+
+# # initialize the workflow from StateGraph
+# workflow = StateGraph(MessagesState)
+
+# # add a node named LLM, with call_model function. This node uses an LLM to make decisions based on the input given
+# workflow.add_node("LLM", call_model)
+
+# # Our workflow starts with the LLM node
+# workflow.add_edge(START, "LLM")
+
+# # Add a tools node
+# workflow.add_node("tools", tool_node)
+
+# # Add a conditional edge from LLM to call_tools function. It can go tools node or end depending on the output of the LLM. 
+# workflow.add_conditional_edges("LLM", call_tools)
+
+# # tools node sends the information back to the LLM
+# workflow.add_edge("tools", "LLM")
+
+# agent = workflow.compile()
+
+# for chunk in agent.stream(
+#     {"messages": [("user", "Search the internet for news today")]},
+#     stream_mode="values",):
+#     chunk["messages"][-1].pretty_print()
+
+
+
+
+
 # class MessageClassifier(BaseModel):
 #     message_type: Literal["suggestions", "itinerary", "calendar"] = Field(
 #         ...,
@@ -212,6 +287,13 @@ for event in app.stream(
 # graph_builder.add_node("suggestions", suggestions_agent)
 # graph_builder.add_node("itinerary", itinerary_agent)
 # graph_builder.add_node("calendar", calendar_agent)
+# @tool("test_tool")
+# def test_tool():
+#     """Test function"""
+#     print("testing")
+
+# test_node =ToolNode([test_tool])
+# graph_builder.add_node("test", test_node)
 
 # graph_builder.add_edge(START, "classifier")
 # graph_builder.add_edge("classifier", "router")
@@ -223,7 +305,8 @@ for event in app.stream(
 # )
 
 # graph_builder.add_edge("itinerary", END)
-# graph_builder.add_edge("suggestions", END)
+# graph_builder.add_edge("suggestions", "test")
+# graph_builder.add_edge("test", END)
 # graph_builder.add_edge("calendar", END)
 
 # graph = graph_builder.compile()

@@ -25,7 +25,7 @@ class FlightSearchParams(BaseModel):
     departure_id: str = Field(..., description="REQUIRED: The 3 letter ID of the departure airport. For example, 'JFK' for John F. Kennedy International Airport. You can specify multiple departure airports by separating them with a comma. For example, CDG,ORY for both Charles de Gaulle and Orly airports in Paris.")
     arrival_id: str = Field(..., description="REQUIRED: The 3 letter ID of the arrival airport. For example, 'JFK' for John F. Kennedy International Airport. You can specify multiple arrvial airports by separating them with a comma. For example, CDG,ORY for both Charles de Gaulle and Orly airports in Paris.")
     outbound_date: str = Field(..., description="REQUIRED: The date of the outbound flight in YYYY-MM-DD format.")
-    return_date: str = Field(..., description="REQUIRED if flight is round trip, otherwise OPTIONAL: The date of the return flight in YYYY-MM-DD format.")
+    return_date: str = Field(..., description="REQUIRED: The date of the return flight in YYYY-MM-DD format.")
     type: int = Field(1, description="OPTIONAL Parameter defines the type of flight. Available options: 1 - Round-trip (default), 2 - One-way")
     travel_class: int = Field(1, description="OPTIONAL Parameter defines the travel class. Available options: 1 - Economy (default), 2 - Premium economy, 3 - Business, 4 - First")
     adults: int = Field(1, description="OPTIONAL Number of adults traveling. Default is 1.")
@@ -46,7 +46,7 @@ def search_flights(
     departure_id: str,
     arrival_id: str,
     outbound_date: str,
-    return_date: str = "",
+    return_date: str,
     type: int = 1,
     travel_class: int = 1,
     adults: int = 1,
@@ -72,12 +72,14 @@ Use this tool only if the user has specified or you can infer:
 If it's a round trip, a return date must also be provided. Other parameters like destination, budget, and number of stops are optional and can be inferred or asked for in conversation.
 
 Returns:
-    A JSON object containing available flight options. Use this data to present multiple choices to the user, highlighting relevant factors like price, number of stops, airlines, and duration.
+    A JSON object containing available flight options. Use this data to present multiple choices to the user but use conversational language, highlighting relevant factors like price, number of stops, airlines, and duration.
+    Do not return the JSON to the user.
 """
     params = {
         "engine": "google_flights",
         "departure_id": departure_id,
         "outbound_date": outbound_date,
+        "return_date": return_date,
         "type": type,
         "travel_class": travel_class,
         "adults": adults,
@@ -96,8 +98,6 @@ Returns:
     # Optional parameters
     if arrival_id:
         params["arrival_id"] = arrival_id
-    if return_date:
-        params["return_date"] = return_date
     if exclude_airlines:
         params["exclude_airlines"] = exclude_airlines
     if include_airlines:
@@ -107,8 +107,9 @@ Returns:
     # Call Google Flight API
     search = GoogleSearch(params)
     results = search.get_dict()
-
-    return results
+    if results["best_flights"]:
+        return results["best_flights"]
+    return results["other_flights"]
 
 class HotelSearchParams(BaseModel):
     location: str = Field(..., description="REQUIRED: The location to search for hotels, e.g., 'Chicago'.")
