@@ -28,21 +28,22 @@ tools = get_tools()
 llm_with_tools = llm.bind_tools(tools)
 
 current_date = datetime.now().strftime("%B %d, %Y")
-system_message = f"""You are a friendly and intelligent travel planning assistant. Your role is to help users plan their trips — from choosing destinations to finding activities — and to build clear, community-informed itineraries that can be added directly to their Google Calendar.
+system_message = f"""You are a friendly and intelligent travel planning assistant. Your role is to help users plan their trips — from choosing destinations to finding activities — and to build clear, community-informed itineraries that can be added directly to their Google Calendar. Make sure to use the itinerary tool if the user asks for an itinerary.
 
 Tailor your responses to the stage of the conversation:
 
 - At the start, offer to help find a travel destination. If the user is unsure where to go, ask engaging questions about their interests, preferred travel style, and desired experiences. Suggest potential destinations based on their answers.
 - After a destination is chosen, offer to help find flights or accommodations. Ask only for the necessary details (like travel dates, departure location, or budget) to use the tools provided.
 - Once travel logistics are handled, offer suggestions for things to do — especially special events, must-see attractions, and highly recommended local food spots. Use Reddit and other community sources to enrich these suggestions.
-- After finding things to do, suggest creating a detailed itinerary. Structure it day-by-day and hour-by-hour based on the trip duration and user preferences.
+- After finding things to do, suggest creating a detailed itinerary. When making an itinerary, search reddit for personal recommendations. Then call the itinerary tool. Do not list out a full itinerary as a message. tell the user a couple things you plan on adding. the itinerary tool will handle the full display of events.
 - Once the itinerary is ready, offer to add it to their Google Calendar. Do **not** create one event per day. Instead, copy the itinerary schedule exactly — including time blocks and descriptions — and insert color-coded events that match the activities by day and hour.
 Always maintain a helpful, conversational tone. Let the user guide the process, but gently lead them toward the next step when appropriate.
 
 Today's date is {current_date}. Use this to understand and resolve any relative time references (e.g., "next Friday", "two weeks from now")."""
+
 # 2. Track last tool in state
 class CustomState(MessagesState):
-    messages: Annotated[list, add_messages] = [SystemMessage(content=system_message)],
+    messages: Annotated[list, add_messages] = [],
     last_tool_used: Optional[str] = None
 
 # 3. Define tool node wrapper to also save last_tool_used
@@ -63,8 +64,15 @@ def tool_node_with_tracking(state: CustomState) -> dict:
 # 4. Define LLM call
 def call_model(state: CustomState): 
     messages = state["messages"]
-    response = llm_with_tools.invoke(messages)
-    return {"messages": [response]}
+    system_prompt = SystemMessage(content=system_message)
+    messages_with_system = [system_prompt] + messages
+    try:
+        response = llm_with_tools.invoke(messages_with_system)
+        return {"messages": [response]}
+    except:
+        return {"messages": [AIMessage(
+                    content=f"{json.dumps({'type': 'error', 'tool_name': "LLM"})}"
+        )]}
 
 # 5. Determine where to go after LLM
 def route_after_llm(state: CustomState) -> Literal["tools", END]:
@@ -73,9 +81,12 @@ def route_after_llm(state: CustomState) -> Literal["tools", END]:
     return END
 
 # 6. Route after tools based on last_tool_used
-def route_after_tools(state: CustomState) -> Literal["summarize", "LLM"]:
+def route_after_tools(state: CustomState) -> Literal["summarize", "itinerary", "LLM"]:
     if state.get("last_tool_used") == "search_flights":
         return "summarize"
+    if state.get("last_tool_used") == "generate_itinerary":
+        print("going to itinerary node")
+        return "itinerary"
     return "LLM"
 
 # 7. Summarization logic
@@ -108,10 +119,29 @@ def summarize_flights(state: CustomState):
         flights_data = []
         for index in response['flights_array']:
             flights_data.append(flight_list[index])
-
         return {"messages": [AIMessage(
                     content=f"{json.dumps({'type': "flight_response", "message": response["message"], "flights_data": flights_data})}"
         )]}
+    except:
+        # Convert to message
+        return {"messages": [AIMessage(
+                    content=f"{json.dumps({'type': 'error', 'tool_name': message.name})}"
+        )]}
+    
+def itinerary(state: CustomState):
+    message = state["messages"][-1]
+    print("\n\nITINIERARY NODE REACHED\n\n")
+    try:
+        if not isinstance(message, ToolMessage) and message.name == "generate_itinerary":
+            raise ValueError("Generate Itinerary tool not called")
+
+        
+        itinerary = message.content
+        print("itinerary", itinerary)
+        return {"messages": [AIMessage(
+                    content=f"{json.dumps({'type': "itinerary_response", "itinerary_data": itinerary})}"
+        )]}
+
     except:
         # Convert to message
         return {"messages": [AIMessage(
@@ -124,6 +154,7 @@ workflow = StateGraph(CustomState)
 workflow.add_node("LLM", call_model)
 workflow.add_node("tools", tool_node_with_tracking)
 workflow.add_node("summarize", summarize_flights)
+workflow.add_node("itinerary", itinerary)
 workflow.set_entry_point("LLM")
 
 workflow.add_conditional_edges("LLM", route_after_llm, {
@@ -133,10 +164,12 @@ workflow.add_conditional_edges("LLM", route_after_llm, {
 
 workflow.add_conditional_edges("tools", route_after_tools, {
     "summarize": "summarize",
+    "itinerary": "itinerary",
     "LLM": "LLM",
 })
 
 workflow.add_edge("summarize", END)
+workflow.add_edge("itinerary", "LLM")
 agent = workflow.compile(checkpointer=MemorySaver())
 config = {"configurable": {"thread_id": "1"}}
 

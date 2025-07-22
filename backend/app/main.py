@@ -79,8 +79,13 @@ async def chat_endpoint(request: Request):
                 if content:
                     # Check if content is a JSON string
                     try:
-                        content_json = json.loads(content)
-                        yield f"{json.dumps(content_json)}[END]"
+                        parsed = json.loads(content)
+                        # If it's a dict with a "type" key, treat it as structured JSON
+                        if isinstance(parsed, dict) and "type" in parsed:
+                            yield f"{json.dumps(parsed)}[END]"
+                        else:
+                            # Otherwise treat it as regular streamed content
+                            yield f"{json.dumps({'type': 'stream', 'content': content})}[END]"
                     except (TypeError, ValueError):
                         yield f"{json.dumps({"type": "stream", "content": content})}[END]"
             
