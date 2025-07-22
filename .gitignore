@@ -39,3 +39,5 @@ viator-env
 __pycache__
 credentials.json
 token.json
+
+metadata.log

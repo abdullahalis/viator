@@ -37,8 +37,14 @@ config = {"configurable": {"thread_id": "abc123"}}
 print("Agent ready")
 
 
-def get_agent():
-    return (agent, config)
+def get_agent(callback=None):
+    config = {
+        "configurable": {
+            "thread_id": "1",  # optional
+        },
+        "callbacks": [callback] if callback else [],
+    }
+    return agent, config
 
 # while True:
 #     user_input = input("You: ")

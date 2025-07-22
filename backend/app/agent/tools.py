@@ -1,5 +1,6 @@
 from langchain_core.tools import tool, Tool
 from langchain_community.utilities import GoogleSerperAPIWrapper
+from langchain_openai import ChatOpenAI
 from serpapi import GoogleSearch
 from langchain_google_community import CalendarToolkit
 import os
@@ -7,6 +8,9 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from dotenv import load_dotenv
 import praw
+from datetime import date
+from typing import List, Optional
+
 load_dotenv()
 
 search_tool = Tool(
@@ -40,7 +44,7 @@ class FlightSearchParams(BaseModel):
     max_price: int = Field(10000, description="OPTIONAL Maximum price for the flight. Default is 10000.")
     currency: str = Field("USD", description="OPTIONAL Currency code (e.g., USD). Default is USD.")
     hl: str = Field("en", description="OPTIONAL Language code (e.g., en for English). Default is en.")
-
+ 
 @tool("search_flights", args_schema=FlightSearchParams)
 def search_flights(
     departure_id: str,
@@ -104,12 +108,15 @@ Returns:
         params["include_airlines"] = include_airlines
 
 
-    # Call Google Flight API
-    search = GoogleSearch(params)
-    results = search.get_dict()
-    if results["best_flights"]:
-        return results["best_flights"]
-    return results["other_flights"]
+    # # Call Google Flight API
+    # search = GoogleSearch(params)
+    # results = search.get_dict()
+
+    # if results["best_flights"]:
+    #     return results["best_flights"] + [return_date]
+    # return results["other_flights"] + [return_date]
+
+    return [{'flights': [{'departure_airport': {'name': "Chicago O'Hare International Airport", 'id': 'ORD', 'time': '2025-07-25 08:25'}, 'arrival_airport': {'name': 'Miami International Airport', 'id': 'MIA', 'time': '2025-07-25 12:35'}, 'duration': 190, 'airplane': 'Boeing 737', 'airline': 'American', 'airline_logo': 'https://www.gstatic.com/flights/airline_logos/70px/AA.png', 'travel_class': 'Economy', 'flight_number': 'AA 1250', 'legroom': '30 in', 'extensions': ['Average legroom (30 in)', 'Wi-Fi for a fee', 'In-seat power & USB outlets', 'Stream media to your device', 'Carbon emissions estimate: 154 kg']}], 'total_duration': 190, 'carbon_emissions': {'this_flight': 154000, 'typical_for_this_route': 158000, 'difference_percent': -3}, 'price': 563, 'type': 'Round trip', 'airline_logo': 'https://www.gstatic.com/flights/airline_logos/70px/AA.png', 'extensions': ['Checked baggage for a fee', 'Bag and fare conditions depend on the return flight'], 'departure_token': 'WyJDalJJY2pCd2N6VkhVVU41U1ZWQlNFZEZjM2RDUnkwdExTMHRMUzB0TFhscGFXUXhNRUZCUVVGQlIyZ3Rablp6U0dZd2JtdEJFZ1pCUVRFeU5UQWFDd2pzdHdNUUFob0RWVk5FT0J4dzdMY0QiLFtbIk9SRCIsIjIwMjUtMDctMjUiLCJNSUEiLG51bGwsIkFBIiwiMTI1MCJdXV0='}, {'flights': [{'departure_airport': {'name': "Chicago O'Hare International Airport", 'id': 'ORD', 'time': '2025-07-25 11:15'}, 'arrival_airport': {'name': 'Raleigh-Durham International Airport', 'id': 'RDU', 'time': '2025-07-25 14:25'}, 'duration': 130, 'airplane': 'Airbus A320neo', 'airline': 'Frontier', 'airline_logo': 'https://www.gstatic.com/flights/airline_logos/70px/F9.png', 'travel_class': 'Economy', 'flight_number': 'F9 3352', 'legroom': '28 in', 'extensions': ['Below average legroom (28 in)', 'Carbon emissions estimate: 86 kg'], 'often_delayed_by_over_30_min': True}, {'departure_airport': {'name': 'Raleigh-Durham International Airport', 'id': 'RDU', 'time': '2025-07-25 15:17'}, 'arrival_airport': {'name': 'Miami International Airport', 'id': 'MIA', 'time': '2025-07-25 17:32'}, 'duration': 135, 'airplane': 'Airbus A320neo', 'airline': 'Frontier', 'airline_logo': 'https://www.gstatic.com/flights/airline_logos/70px/F9.png', 'travel_class': 'Economy', 'flight_number': 'F9 3321', 'legroom': '28 in', 'extensions': ['Below average legroom (28 in)', 'Carbon emissions estimate: 92 kg'], 'often_delayed_by_over_30_min': True}], 'layovers': [{'duration': 52, 'name': 'Raleigh-Durham International Airport', 'id': 'RDU'}], 'total_duration': 317, 'carbon_emissions': {'this_flight': 179000, 'typical_for_this_route': 158000, 'difference_percent': 13}, 'price': 297, 'type': 'Round trip', 'airline_logo': 'https://www.gstatic.com/flights/airline_logos/70px/F9.png', 'extensions': ['Checked baggage for a fee', 'Bag and fare conditions depend on the return flight'], 'departure_token': 'WyJDalJJY2pCd2N6VkhVVU41U1ZWQlNFZEZjM2RDUnkwdExTMHRMUzB0TFhscGFXUXhNRUZCUVVGQlIyZ3Rablp6U0dZd2JtdEJFZzFHT1RNek5USjhSamt6TXpJeEdnc0loT2dCRUFJYUExVlRSRGdjY0lUb0FRPT0iLFtbIk9SRCIsIjIwMjUtMDctMjUiLCJSRFUiLG51bGwsIkY5IiwiMzM1MiJdLFsiUkRVIiwiMjAyNS0wNy0yNSIsIk1JQSIsbnVsbCwiRjkiLCIzMzIxIl1dXQ=='}, {'flights': [{'departure_airport': {'name': "Chicago O'Hare International Airport", 'id': 'ORD', 'time': '2025-07-25 08:09'}, 'arrival_airport': {'name': 'Miami International Airport', 'id': 'MIA', 'time': '2025-07-25 12:23'}, 'duration': 194, 'airplane': 'Airbus A321 (Sharklets)', 'airline': 'Spirit', 'airline_logo': 'https://www.gstatic.com/flights/airline_logos/70px/NK.png', 'travel_class': 'Economy', 'flight_number': 'NK 1101', 'legroom': '28 in', 'extensions': ['Below average legroom (28 in)', 'Wi-Fi for a fee', 'Carbon emissions estimate: 163 kg']}], 'total_duration': 194, 'carbon_emissions': {'this_flight': 164000, 'typical_for_this_route': 158000, 'difference_percent': 4}, 'price': 488, 'type': 'Round trip', 'airline_logo': 'https://www.gstatic.com/flights/airline_logos/70px/NK.png', 'extensions': ['Checked baggage for a fee', 'Bag and fare conditions depend on the return flight'], 'departure_token': 'WyJDalJJY2pCd2N6VkhVVU41U1ZWQlNFZEZjM2RDUnkwdExTMHRMUzB0TFhscGFXUXhNRUZCUVVGQlIyZ3Rablp6U0dZd2JtdEJFZ1pPU3pFeE1ERWFDd2llL1FJUUFob0RWVk5FT0J4d252MEMiLFtbIk9SRCIsIjIwMjUtMDctMjUiLCJNSUEiLG51bGwsIk5LIiwiMTEwMSJdXV0='}]
 
 class HotelSearchParams(BaseModel):
     location: str = Field(..., description="REQUIRED: The location to search for hotels, e.g., 'Chicago'.")
@@ -227,8 +234,59 @@ def get_reddit_comments(url):
     return top_comments
 
 # tools = [search_tool, search_flights, search_hotels, make_itinerary]
-tools = [search_tool, search_flights, search_hotels, get_reddit_comments] + calendar_tools
 
+
+# 1. Define the output schema
+class Activity(BaseModel):
+    time: str
+    title: str
+    description: str
+
+class DayPlan(BaseModel):
+    date: str
+    activities: List[Activity]
+
+class Itinerary(BaseModel):
+    location: str
+    days: List[DayPlan]
+    
+# 3. Set up the LLM with structured JSON output
+structured_llm = ChatOpenAI(
+    model="gpt-4o",
+    tags=["structured"]
+).with_structured_output(method="json_mode")
+# --- Input Schema ---
+class ItineraryParams(BaseModel):
+    location: str = Field(..., description="The destination city or region")
+    start_date: str = Field(..., description="Start date of the trip in YYYY-MM-DD format")
+    end_date: str = Field(..., description="End date of the trip in YYYY-MM-DD format")
+    interests: Optional[List[str]] = Field(default_factory=list, description="Optional list of travel interests (e.g. food, museums, hiking)")
+
+# --- Tool Function ---
+@tool("generate_itinerary", args_schema=ItineraryParams)
+def generate_itinerary(location: str, start_date: str, end_date: str, interests: List[str] = ["food", "sightseeing", "local experiences"]): 
+    """
+    Creates a structured day-by-day itinerary in JSON format for a given location, date range, and optional interests.
+    Suitable for frontend display or exporting to a calendar.
+    """
+    # Prepare prompts
+    print("generating itin...")
+    print(start_date, end_date, interests, location)
+    interest_text = ", ".join(interests)
+
+    prompt = (
+        f"Plan a multi-day trip to {location} from {start_date} to {end_date}. "
+        f"Tailor it to the following interests: {interest_text}. "
+        f"Return only structured JSON containing one entry per day with activities broken down by hour."
+    )
+    
+    # Call the model
+    result =  structured_llm.invoke(prompt)
+    # result = "making teh itin"
+    print("result itini:", result)
+    return result
+
+tools = [search_tool, search_flights, search_hotels, get_reddit_comments, generate_itinerary] + calendar_tools
 def get_tools():
     """
     Returns the list of tools available for the agent.
