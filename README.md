@@ -6,7 +6,7 @@ An AI-powered conversational agent that plans personalized travel itineraries wi
 
 ##  Installation Instructions
 
-### 1. Download and open the zip file. Make sure there's a .env file in the root of your directory
+### 1. Download and open the git repo. Place .env in the same directory as this readme and the .gitignore. Place credentials.json and token.json inside viator/backend/app
 
 ### 2. split your terminal
 
