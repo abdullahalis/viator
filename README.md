@@ -20,12 +20,12 @@ In one terminal run
 cd backend/app
 python -m venv viator-env
 ```
+On windows
 ```
-# On windows
 .\viator-env\Scripts\Activate.ps1
 ```
+On Mac
 ```
-# on Mac
 source venv/bin/activate
 ```
 
