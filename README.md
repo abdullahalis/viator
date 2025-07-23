@@ -17,7 +17,7 @@ An AI-powered conversational agent that plans personalized travel itineraries wi
 In one terminal run 
 
 ```
-cd backend/app
+cd backend
 python -m venv viator-env
 ```
 On windows
@@ -45,6 +45,7 @@ python-dotenv
 ```
 ### c. run the FastAPI backend
 ```
+cd app
 uvicorn main:app --reload --port 8000
 ```
 ---
