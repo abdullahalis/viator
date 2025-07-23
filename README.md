@@ -19,8 +19,12 @@ In one terminal run
 ```
 cd backend/app
 python -m venv viator-env
+```
+```
 # On windows
 .\viator-env\Scripts\Activate.ps1
+```
+```
 # on Mac
 source venv/bin/activate
 ```
