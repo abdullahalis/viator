@@ -23,6 +23,8 @@ python -m venv viator-env
 On windows
 ```
 .\viator-env\Scripts\Activate.ps1
+# or
+.\viator-env\Scripts\activate.bat
 ```
 On Mac
 ```
