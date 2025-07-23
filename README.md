@@ -77,7 +77,7 @@ By default:
 Once both frontend and backend are running:
 
 1. Open [http://localhost:3000](http://localhost:3000).
-2. Type your travel request into the chat (e.g., `Plan me a 5-day trip to Tokyo under $2000`).
+2. Type your travel request into the chat (e.g., `Plan me a 5-day trip to Tokyo under $2000`, `Show me flights from ORD to MIA next Friday for one week`).
 3. The assistant will:
    - Respond conversationally with suggestions.
    - Display structured content like flight results and itinerary.
