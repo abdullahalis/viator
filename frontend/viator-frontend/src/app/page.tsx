@@ -26,14 +26,14 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);  // Handle DOM errors
-  const bottomRef = useRef<HTMLDivElement | null>(null); // Automatic Scrolling
+  // const bottomRef = useRef<HTMLDivElement | null>(null); // Automatic Scrolling
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-    return () => clearTimeout(timeout)
-  }, [conversation]);
+  // useEffect(() => {
+  //   const timeout = setTimeout(() => {
+  //     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  //   }, 100);
+  //   return () => clearTimeout(timeout)
+  // }, [conversation]);
 
   async function sendMessage(message: string) {
     setIsLoading(true);
@@ -93,14 +93,14 @@ export default function Home() {
 }
 
   return (
-  <div className="h-screen w-full flex flex-col bg-secondary text-white relative">
+  <div id="app" className="h-screen w-full flex flex-col bg-secondary text-white relative">
     {/* Title */}
     <div className="p-6 text-center  bg-secondary">
       <h1 className="text-2xl font-bold">Viator - AI Travel Agent</h1>
     </div>
 
     {/* Chat Container */}
-    <Card className="flex-1 overflow-y-auto bg-background shadow-inner">
+    <Card className="flex-1 overflow-y-scroll bg-background shadow-inner">
       <CardContent className="p-6 space-y-4">
         {/* Learn More Button */}
         {conversation.length === 0 && (
@@ -119,7 +119,7 @@ export default function Home() {
             <ChatMessage msg={msg} />
           </div>
         ))}
-        <div ref={bottomRef} />
+        {/* <div ref={bottomRef} /> */}
       </CardContent>
     </Card>
 

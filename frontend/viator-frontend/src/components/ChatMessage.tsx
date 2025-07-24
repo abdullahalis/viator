@@ -15,6 +15,7 @@ export default function ChatBubble({ msg }: { msg: any }) {
 
   return (
     <div className="p-4 pb-24 rounded-xl text-gray-800 overflow-y-auto max-h-[calc(100vh-200px)]">
+      {/* Tools Used Bubbles */}
       {msg.toolsUsed && (
         <div className="flex flex-col items-start mb-2">
           {msg.toolsUsed.map((tool: string, i: number) => (
@@ -27,8 +28,24 @@ export default function ChatBubble({ msg }: { msg: any }) {
           ))}
         </div>
       )}
-      <Markdown className="whitespace-pre-wrap">{msg.content}</Markdown>
-
+      {/* AI Message */}
+      <Markdown
+        className="whitespace-pre-wrap"
+        // Make links open in new tab
+        options={{
+          overrides: {
+            a: {
+              props: {
+                target: "_blank",
+                rel: "noopener noreferrer",
+              },
+            },
+          },
+        }}
+      >
+        {msg.content}
+      </Markdown>
+        
       {msg.flightsData && (
         <div className="mt-2">
           <FlightsTable flightsData={msg.flightsData} />

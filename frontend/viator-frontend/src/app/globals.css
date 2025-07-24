@@ -122,3 +122,10 @@
     @apply bg-background text-foreground;
   }
 }
+a {
+  @apply text-blue-500 underline hover:text-blue-700;
+}
+html,
+body {
+  @apply overflow-hidden h-full;
+}
