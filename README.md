@@ -45,6 +45,7 @@ openai
 pydantic
 python-dotenv
 ```
+
 ### c. run the FastAPI backend
 ```
 cd app
@@ -90,7 +91,7 @@ Once both frontend and backend are running:
 ## 📌 Features
 - 🔍 Live flight search integration
 - 🗺️ Reddit-based hidden gem recommendations
-- 📆 Google Calendar event creation
+- 📆 Google Calendar event creation. These can be viewed [here](https://calendar.google.com/calendar/u/0?cid=d2FoYmhhaWJlYXRzQGdtYWlsLmNvbQ)
 - 🧠 GPT-4o-mini powered agent orchestration
 
 ---
